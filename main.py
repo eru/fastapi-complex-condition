@@ -28,50 +28,58 @@ class Filter(BaseModel):
     cond: Condition = Field(title="condition")
 
 
+class Filters(BaseModel):
+    options: list[Filter] = Field([], title="optionsのフィルタ")
+
+
 class Item(BaseModel):
+    id: int = Field(title="ID")
     name: str = Field(title="名前")
     options: dict[str, Any] = Field(title="options")
 
+
+def options_filter(f: Filter, item: Item) -> bool:
+    if f.key not in item.options:
+        return False
+
+    val = item.options[f.key]
+
+    if type(f.val) != type(val):
+        return False
+
+    if f.cond == Condition.EQ:
+        return val == f.val
+    if f.cond == Condition.NEQ:
+        return val != f.val
+    if f.cond == Condition.GT:
+        return val > f.val
+    if f.cond == Condition.GE:
+        return val >= f.val
+    if f.cond == Condition.LT:
+        return val < f.val
+    if f.cond == Condition.LE:
+        return val <= f.val
+
+    return False  # pragma: no cover
+
+
 items = [
-    Item(name="名前1", options={}),
-    Item(name="名前2", options={"int": 1, "float": 1.1, "date": "2021-01-01", "str": "foobazbar"}),
+    Item(id=1, name="名前1", options={}),
+    Item(id=2, name="名前2", options={"int": 1, "float": 1.1, "date": "2021-01-01", "str": "foobazbar"}),
 ]
 
-@app.get("/items", response_model=list[Item])
-def read_root(
+
+@app.post("/items/search", response_model=list[Item])
+def search_items(
     name: str = Query("", title="name", description="nameの部分一致"),
-    options: list[Filter] = Body([], title="options", description="optionsのフィルタ"),
-) -> list[Item]:
+    filters: Filters = Body(Filters(), title="filter", description="options filter")
+) -> Any:
     results = items
 
     if name:
         results = list(filter(lambda x: name in x.name, results))
 
-    def options_filter(f: Filter, item: Item) -> bool:
-        if f.key not in item.options:
-            return False
-
-        val = item.options[f.key]
-
-        if type(f.val) != type(val):
-            return False
-
-        if f.cond == Condition.EQ:
-            return val == f.val
-        if f.cond == Condition.NEQ:
-            return val != f.val
-        if f.cond == Condition.GT:
-            return val > f.val
-        if f.cond == Condition.GE:
-            return val >= f.val
-        if f.cond == Condition.LT:
-            return val < f.val
-        if f.cond == Condition.LE:
-            return val <= f.val
-
-        return False  # pragma: no cover
-
-    for o in options:
+    for o in filters.options:
         results = list(filter(lambda x: options_filter(o, x), results))
 
     return results
